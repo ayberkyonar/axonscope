@@ -1,0 +1,26 @@
+# Generates Go code for Axon Server's DCB event store API.
+# Run `go generate ./...` from the repository root to regenerate.
+version: v2
+
+inputs:
+  - git_repo: https://github.com/AxonIQ/axon-server-api.git
+    commit: f8cc9441469aeeea5dbd90a80cdf9ee5dd819099
+    subdir: src/main/proto
+    paths:
+      - common.proto
+      - dcb.proto
+
+# The Axon protos only declare Java options, so we set the Go package here.
+managed:
+  enabled: true
+  override:
+    - file_option: go_package
+      value: github.com/ayberkyonar/axonscope/internal/eventstore/internal/axonpb
+
+plugins:
+  - local: ["go", "tool", "protoc-gen-go"]
+    out: .
+    opt: paths=source_relative
+  - local: ["go", "tool", "protoc-gen-go-grpc"]
+    out: .
+    opt: paths=source_relative
