@@ -1,0 +1,102 @@
+package eventstore
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"iter"
+	"time"
+
+	"github.com/ayberkyonar/axonscope/internal/eventstore/internal/axonpb"
+)
+
+// Event is one event read from the event store.
+type Event struct {
+	// Sequence is the event's position in the event store, starting at 0.
+	Sequence int64
+	ID       string
+	// Name is the event type, usually a fully qualified class name
+	// such as "com.example.events.AccountRegistered".
+	Name      string
+	Version   string
+	Timestamp time.Time
+	Tags      []Tag
+	Metadata  map[string]string
+	// Payload is the serialized event, usually JSON.
+	Payload []byte
+}
+
+// Tag links an event to a domain concept, such as userId=123.
+// Applications use tags to find the events that belong together.
+type Tag struct {
+	Key   string
+	Value string
+}
+
+// Events returns the events from sequence from onward, oldest first,
+// up to the event store's current head.
+//
+// Range over the result to read the events. Stopping early is cheap:
+// the stream is closed and no further events are fetched.
+// After an error, the iteration stops.
+func (s *Store) Events(ctx context.Context, from int64) iter.Seq2[Event, error] {
+	return func(yield func(Event, error) bool) {
+		// Cancelling the context closes the stream, also when the caller stops early.
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
+
+		stream, err := s.events.Source(ctx, &axonpb.SourceEventsRequest{FromSequence: from})
+		if err != nil {
+			yield(Event{}, fmt.Errorf("read events: %w", err))
+			return
+		}
+
+		for {
+			resp, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			if err != nil {
+				yield(Event{}, fmt.Errorf("read events: %w", err))
+				return
+			}
+
+			sequenced := resp.GetEvent()
+			if sequenced == nil {
+				continue // a consistency marker, which only matters for appending
+			}
+
+			event, err := s.toEvent(ctx, sequenced)
+			if !yield(event, err) || err != nil {
+				return
+			}
+		}
+	}
+}
+
+// toEvent converts a protobuf event to an Event.
+// The event store sends tags separately, so this fetches them too.
+func (s *Store) toEvent(ctx context.Context, sequenced *axonpb.SequencedEvent) (Event, error) {
+	resp, err := s.events.GetTags(ctx, &axonpb.GetTagsRequest{Sequence: sequenced.GetSequence()})
+	if err != nil {
+		return Event{}, fmt.Errorf("read tags of event %d: %w", sequenced.GetSequence(), err)
+	}
+
+	tags := make([]Tag, len(resp.GetTag()))
+	for i, tag := range resp.GetTag() {
+		tags[i] = Tag{Key: string(tag.GetKey()), Value: string(tag.GetValue())}
+	}
+
+	e := sequenced.GetEvent()
+	return Event{
+		Sequence:  sequenced.GetSequence(),
+		ID:        e.GetIdentifier(),
+		Name:      e.GetName(),
+		Version:   e.GetVersion(),
+		Timestamp: time.UnixMilli(e.GetTimestamp()),
+		Tags:      tags,
+		Metadata:  e.GetMetadata(),
+		Payload:   e.GetPayload(),
+	}, nil
+}

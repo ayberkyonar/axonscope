@@ -28,6 +28,6 @@ func newRootCmd() *cobra.Command {
 	flags.StringVar(&cfg.Address, "server", "localhost:8124", "Axon Server gRPC address (host:port)")
 	flags.StringVar(&cfg.Context, "context", "default", "Axon Server context")
 
-	root.AddCommand(newHeadCmd(&cfg))
+	root.AddCommand(newHeadCmd(&cfg), newEventsCmd(&cfg))
 	return root
 }
