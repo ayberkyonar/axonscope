@@ -42,15 +42,20 @@ func addTools(server *mcp.Server, store *eventstore.Store) {
 			"It reads every matching event, so on a large event store set 'since', e.g. '7d' for the last week.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in filterInput) (*mcp.CallToolResult, eventjson.Stats, error) {
-		query, err := in.query(time.Now())
-		if err != nil {
-			return nil, eventjson.Stats{}, err
-		}
-		stats, err := store.Stats(ctx, query)
-		if err != nil {
-			return nil, eventjson.Stats{}, err
-		}
-		return nil, eventjson.FromStats(stats), nil
+		out, err := eventStats(ctx, store, in, time.Now())
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "event_trend",
+		Description: "Count events per hour, day or week, oldest first, including periods without events, " +
+			"with counts per event type in each period. Use it to see whether activity goes up or down, or when peaks happen. " +
+			"Pass the user's time zone so days start at their midnight. Keep it under about 100 periods, " +
+			"e.g. 'hour' for a day or two, 'day' for weeks, 'week' for months.",
+		Annotations: readOnly,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in trendInput) (*mcp.CallToolResult, eventjson.Trend, error) {
+		out, err := eventTrend(ctx, store, in, time.Now())
+		return nil, out, err
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

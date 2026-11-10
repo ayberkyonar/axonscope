@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ayberkyonar/axonscope/internal/eventstore"
+	"github.com/ayberkyonar/axonscope/internal/insight"
 )
 
 // Event is the JSON form of an eventstore.Event.
@@ -46,7 +47,7 @@ func From(e eventstore.Event) Event {
 	}
 }
 
-// Stats is the JSON form of eventstore.Stats.
+// Stats is the JSON form of insight.Stats.
 type Stats struct {
 	Total  int         `json:"total"`
 	First  string      `json:"first,omitempty" jsonschema:"timestamp of the oldest counted event; absent when there are none"`
@@ -54,21 +55,50 @@ type Stats struct {
 	ByName []NameCount `json:"byName" jsonschema:"number of events per name, most frequent first"`
 }
 
-// NameCount is the JSON form of eventstore.NameCount.
+// NameCount is the JSON form of insight.NameCount.
 type NameCount struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
 }
 
 // FromStats converts stats to their JSON form.
-func FromStats(s eventstore.Stats) Stats {
-	out := Stats{Total: s.Total, ByName: make([]NameCount, len(s.ByName))}
+func FromStats(s insight.Stats) Stats {
+	out := Stats{Total: s.Total, ByName: fromNameCounts(s.ByName)}
 	if s.Total > 0 {
 		out.First = formatTime(s.First)
 		out.Last = formatTime(s.Last)
 	}
-	for i, nc := range s.ByName {
-		out.ByName[i] = NameCount{Name: nc.Name, Count: nc.Count}
+	return out
+}
+
+// Trend is the JSON form of a trend.
+type Trend struct {
+	Unit     string        `json:"unit" jsonschema:"length of each period: hour, day or week"`
+	TimeZone string        `json:"timeZone" jsonschema:"time zone whose calendar sets the period boundaries"`
+	Periods  []TrendPeriod `json:"periods" jsonschema:"one entry per period, oldest first, including periods without events"`
+}
+
+// TrendPeriod is the JSON form of insight.Bucket.
+type TrendPeriod struct {
+	Start  string      `json:"start" jsonschema:"start of the period, RFC 3339 in the trend's time zone"`
+	Total  int         `json:"total"`
+	ByName []NameCount `json:"byName,omitempty" jsonschema:"events per name in this period, most frequent first"`
+}
+
+// FromTrend converts a trend to its JSON form. Period starts keep their
+// time zone, so a day reads as local midnight, like 2026-11-05T00:00:00+01:00.
+func FromTrend(unit insight.Unit, loc *time.Location, buckets []insight.Bucket) Trend {
+	out := Trend{Unit: unit.String(), TimeZone: loc.String(), Periods: make([]TrendPeriod, len(buckets))}
+	for i, b := range buckets {
+		out.Periods[i] = TrendPeriod{Start: b.Start.Format(time.RFC3339), Total: b.Total, ByName: fromNameCounts(b.ByName)}
+	}
+	return out
+}
+
+func fromNameCounts(list []insight.NameCount) []NameCount {
+	out := make([]NameCount, len(list))
+	for i, nc := range list {
+		out[i] = NameCount{Name: nc.Name, Count: nc.Count}
 	}
 	return out
 }

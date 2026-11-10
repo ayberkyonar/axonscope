@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ayberkyonar/axonscope/internal/eventstore"
+	"github.com/ayberkyonar/axonscope/internal/insight"
 )
 
 // eventsWithSequences returns an iterator over empty events with the given
@@ -104,5 +105,56 @@ func TestFilterInputQuery(t *testing.T) {
 func TestFilterInputQueryRejectsInvalidTime(t *testing.T) {
 	if _, err := (filterInput{Since: "last week"}).query(time.Now()); err == nil {
 		t.Error("query returned no error")
+	}
+}
+
+func TestTrendInput(t *testing.T) {
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+
+	query, periods, err := trendInput{filterInput: filterInput{Since: "7d"}, By: "hour", TimeZone: "Europe/Amsterdam"}.trend(now)
+	if err != nil {
+		t.Fatalf("trend returned error: %v", err)
+	}
+
+	if !query.SkipTags {
+		t.Error("a trend should not fetch tags")
+	}
+	if periods.Unit != insight.Hour || periods.Location.String() != "Europe/Amsterdam" {
+		t.Errorf("got unit %v in %v, want hour in Europe/Amsterdam", periods.Unit, periods.Location)
+	}
+	if !periods.From.Equal(now.AddDate(0, 0, -7)) || !periods.To.Equal(now) {
+		t.Errorf("got %v to %v, want 7 days ago to now", periods.From, periods.To)
+	}
+}
+
+func TestTrendInputDefaults(t *testing.T) {
+	_, periods, err := trendInput{}.trend(time.Now())
+	if err != nil {
+		t.Fatalf("trend returned error: %v", err)
+	}
+	if periods.Unit != insight.Day || periods.Location != time.UTC {
+		t.Errorf("got unit %v in %v, want day in UTC", periods.Unit, periods.Location)
+	}
+}
+
+func TestTrendInputRejectsInvalid(t *testing.T) {
+	for _, in := range []trendInput{{By: "month"}, {TimeZone: "Mars/Olympus"}} {
+		if _, _, err := in.trend(time.Now()); err == nil {
+			t.Errorf("trend(%+v) returned no error", in)
+		}
+	}
+}
+
+func TestTrendInputReadsDatesInItsTimeZone(t *testing.T) {
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+
+	_, periods, err := trendInput{filterInput: filterInput{Since: "2026-11-05", Until: "2026-11-07"}, TimeZone: "Europe/Amsterdam"}.trend(now)
+	if err != nil {
+		t.Fatalf("trend returned error: %v", err)
+	}
+
+	// Midnight in Amsterdam (UTC+1) is 23:00 UTC the day before.
+	if want := time.Date(2026, 11, 6, 23, 0, 0, 0, time.UTC); !periods.To.Equal(want) {
+		t.Errorf("To = %v, want %v", periods.To.UTC(), want)
 	}
 }

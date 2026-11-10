@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -30,10 +31,15 @@ type Event struct {
 	Payload []byte
 }
 
-// ShortName returns the event name without its package:
-// "com.example.events.AccountRegistered" becomes "AccountRegistered".
+// ShortName returns the event name without its package, see ShortName.
 func (e Event) ShortName() string {
-	return shortName(e.Name)
+	return ShortName(e.Name)
+}
+
+// ShortName returns an event name without its package:
+// "com.example.events.AccountRegistered" becomes "AccountRegistered".
+func ShortName(name string) string {
+	return name[strings.LastIndex(name, ".")+1:]
 }
 
 // Tag links an event to a domain concept, such as userId=123.
@@ -60,7 +66,10 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 				yield(Event{}, err)
 				return
 			}
-			event, err := s.toEvent(ctx, sequenced)
+			event := toEvent(sequenced)
+			if !q.SkipTags {
+				event.Tags, err = s.tags(ctx, event.Sequence)
+			}
 			if !yield(event, err) || err != nil {
 				return
 			}
@@ -149,19 +158,9 @@ func (s *Store) Event(ctx context.Context, sequence int64) (Event, error) {
 	return Event{}, fmt.Errorf("event %d: %w", sequence, ErrNotFound)
 }
 
-// toEvent converts a protobuf event to an Event.
-// The event store sends tags separately, so this fetches them too.
-func (s *Store) toEvent(ctx context.Context, sequenced *axonpb.SequencedEvent) (Event, error) {
-	resp, err := s.events.GetTags(ctx, &axonpb.GetTagsRequest{Sequence: sequenced.GetSequence()})
-	if err != nil {
-		return Event{}, s.rpcError(fmt.Sprintf("read tags of event %d", sequenced.GetSequence()), err)
-	}
-
-	tags := make([]Tag, len(resp.GetTag()))
-	for i, tag := range resp.GetTag() {
-		tags[i] = Tag{Key: string(tag.GetKey()), Value: string(tag.GetValue())}
-	}
-
+// toEvent converts a protobuf event to an Event, without its tags:
+// the event store sends those separately.
+func toEvent(sequenced *axonpb.SequencedEvent) Event {
 	e := sequenced.GetEvent()
 	return Event{
 		Sequence:  sequenced.GetSequence(),
@@ -169,8 +168,20 @@ func (s *Store) toEvent(ctx context.Context, sequenced *axonpb.SequencedEvent) (
 		Name:      e.GetName(),
 		Version:   e.GetVersion(),
 		Timestamp: time.UnixMilli(e.GetTimestamp()),
-		Tags:      tags,
 		Metadata:  e.GetMetadata(),
 		Payload:   e.GetPayload(),
-	}, nil
+	}
+}
+
+// tags fetches the tags of the event at sequence.
+func (s *Store) tags(ctx context.Context, sequence int64) ([]Tag, error) {
+	resp, err := s.events.GetTags(ctx, &axonpb.GetTagsRequest{Sequence: sequence})
+	if err != nil {
+		return nil, s.rpcError(fmt.Sprintf("read tags of event %d", sequence), err)
+	}
+	tags := make([]Tag, len(resp.GetTag()))
+	for i, tag := range resp.GetTag() {
+		tags[i] = Tag{Key: string(tag.GetKey()), Value: string(tag.GetValue())}
+	}
+	return tags, nil
 }

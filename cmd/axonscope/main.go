@@ -5,6 +5,9 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	// Embeds the time zone database, so names like Europe/Amsterdam work on
+	// systems without one, such as Windows and the minimal Docker image.
+	_ "time/tzdata"
 
 	"github.com/ayberkyonar/axonscope/internal/cli"
 )

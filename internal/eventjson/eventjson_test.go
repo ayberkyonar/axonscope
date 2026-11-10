@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ayberkyonar/axonscope/internal/eventstore"
+	"github.com/ayberkyonar/axonscope/internal/insight"
 )
 
 func TestFrom(t *testing.T) {
@@ -34,11 +35,11 @@ func TestFrom(t *testing.T) {
 }
 
 func TestFromStats(t *testing.T) {
-	stats := eventstore.Stats{
+	stats := insight.Stats{
 		Total:  3,
 		First:  time.Date(2026, 11, 5, 21, 0, 0, 0, time.FixedZone("CET", 3600)),
 		Last:   time.Date(2026, 11, 5, 22, 0, 0, 0, time.FixedZone("CET", 3600)),
-		ByName: []eventstore.NameCount{{Name: "com.example.LoggedOut", Count: 3}},
+		ByName: []insight.NameCount{{Name: "com.example.LoggedOut", Count: 3}},
 	}
 
 	got, err := json.Marshal(FromStats(stats))
@@ -54,7 +55,7 @@ func TestFromStats(t *testing.T) {
 }
 
 func TestFromStatsWithoutEvents(t *testing.T) {
-	got, err := json.Marshal(FromStats(eventstore.Stats{}))
+	got, err := json.Marshal(FromStats(insight.Stats{}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,5 +79,27 @@ func TestDecodePayload(t *testing.T) {
 		if got := decodePayload([]byte(tt.payload)); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("decodePayload(%q) = %#v, want %#v", tt.payload, got, tt.want)
 		}
+	}
+}
+
+func TestFromTrend(t *testing.T) {
+	cet := time.FixedZone("CET", 3600)
+	buckets := []insight.Bucket{
+		{Start: time.Date(2026, 11, 5, 0, 0, 0, 0, cet), Total: 2,
+			ByName: []insight.NameCount{{Name: "com.example.Placed", Count: 2}}},
+		{Start: time.Date(2026, 11, 6, 0, 0, 0, 0, cet)},
+	}
+
+	got, err := json.Marshal(FromTrend(insight.Day, cet, buckets))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Starts keep the time zone, and empty periods have no byName.
+	want := `{"unit":"day","timeZone":"CET","periods":[` +
+		`{"start":"2026-11-05T00:00:00+01:00","total":2,"byName":[{"name":"com.example.Placed","count":2}]},` +
+		`{"start":"2026-11-06T00:00:00+01:00","total":0}]}`
+	if string(got) != want {
+		t.Errorf("got  %s\nwant %s", got, want)
 	}
 }

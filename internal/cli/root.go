@@ -57,6 +57,6 @@ func newRootCmd() *cobra.Command {
 	flags.StringVar(&opts.store.CACertFile, "ca-cert", "", "PEM file of the CA that signed the server's certificate (implies --tls)")
 	flags.StringVarP(&opts.output, "output", "o", "text", "output format: text or json")
 
-	root.AddCommand(newHeadCmd(opts), newEventsCmd(opts), newEventCmd(opts), newStatsCmd(opts), newMCPCmd(opts))
+	root.AddCommand(newHeadCmd(opts), newEventsCmd(opts), newEventCmd(opts), newStatsCmd(opts), newTrendCmd(opts), newMCPCmd(opts))
 	return root
 }

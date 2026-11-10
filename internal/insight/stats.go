@@ -1,11 +1,17 @@
-package eventstore
+// Package insight turns events into overviews, such as counts and trends.
+//
+// It works on any iterator of events, not on Axon Server directly, so the same
+// logic can serve live reads now and a stored projection later.
+package insight
 
 import (
 	"cmp"
-	"context"
+	"iter"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/ayberkyonar/axonscope/internal/eventstore"
 )
 
 // Stats summarizes a set of events.
@@ -24,34 +30,26 @@ type NameCount struct {
 	Count int
 }
 
-// ShortName returns the name without its package, like Event.ShortName.
+// ShortName returns the name without its package, like eventstore.ShortName.
 func (nc NameCount) ShortName() string {
-	return shortName(nc.Name)
+	return eventstore.ShortName(nc.Name)
 }
 
-// Stats counts the events selected by q.
-//
-// It reads every selected event, so narrow q down on a large event store,
-// for example with Since. It skips fetching tags, which makes it much
-// faster than ranging over Events.
-func (s *Store) Stats(ctx context.Context, q Query) (Stats, error) {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
+// Summarize counts events per name. It doesn't use tags, so read the events
+// with eventstore.Query.SkipTags to make it much faster.
+func Summarize(events iter.Seq2[eventstore.Event, error]) (Stats, error) {
 	var stats Stats
 	counts := map[string]int{}
-	for sequenced, err := range s.selected(ctx, q) {
+	for e, err := range events {
 		if err != nil {
 			return Stats{}, err
 		}
-		e := sequenced.GetEvent()
-		timestamp := time.UnixMilli(e.GetTimestamp())
 		if stats.Total == 0 {
-			stats.First = timestamp
+			stats.First = e.Timestamp
 		}
-		stats.Last = timestamp
+		stats.Last = e.Timestamp
 		stats.Total++
-		counts[e.GetName()]++
+		counts[e.Name]++
 	}
 	stats.ByName = byCount(counts)
 	return stats, nil

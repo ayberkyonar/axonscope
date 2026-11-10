@@ -5,15 +5,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ayberkyonar/axonscope/internal/eventstore"
+	"github.com/ayberkyonar/axonscope/internal/insight"
 )
 
 func TestWriteStatsText(t *testing.T) {
-	stats := eventstore.Stats{
+	stats := insight.Stats{
 		Total: 112,
 		First: time.Date(2026, 11, 5, 20, 0, 0, 0, time.Local),
 		Last:  time.Date(2026, 11, 5, 22, 30, 0, 0, time.Local),
-		ByName: []eventstore.NameCount{
+		ByName: []insight.NameCount{
 			{Name: "com.example.LoginSucceeded", Count: 100},
 			{Name: "com.example.LoggedOut", Count: 12},
 		},
@@ -36,7 +36,7 @@ func TestWriteStatsText(t *testing.T) {
 
 func TestWriteStatsTextWithoutEvents(t *testing.T) {
 	var out strings.Builder
-	if err := writeStatsText(&out, eventstore.Stats{}); err != nil {
+	if err := writeStatsText(&out, insight.Stats{}); err != nil {
 		t.Fatalf("writeStatsText returned error: %v", err)
 	}
 	if out.String() != "no events\n" {

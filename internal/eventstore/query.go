@@ -32,6 +32,11 @@ type Query struct {
 	// Reading stops at the first event at or after Until. This assumes
 	// timestamps grow with sequence numbers, as they do in a normal event store.
 	Until time.Time
+
+	// SkipTags leaves Event.Tags empty. Axon Server sends tags separately,
+	// so skipping them saves one call per event: use it when reading many
+	// events whose tags you don't need, for example to count them.
+	SkipTags bool
 }
 
 func (q Query) beforeSince(t time.Time) bool {
@@ -65,7 +70,7 @@ func (q Query) matchesName(name string) bool {
 	if len(q.Names) == 0 {
 		return true
 	}
-	short := shortName(name)
+	short := ShortName(name)
 	return slices.ContainsFunc(q.Names, func(n string) bool {
 		return n == name || n == short
 	})
@@ -73,8 +78,4 @@ func (q Query) matchesName(name string) bool {
 
 func isShortName(name string) bool {
 	return !strings.Contains(name, ".")
-}
-
-func shortName(name string) string {
-	return name[strings.LastIndex(name, ".")+1:]
 }

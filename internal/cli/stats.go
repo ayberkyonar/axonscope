@@ -11,6 +11,7 @@ import (
 
 	"github.com/ayberkyonar/axonscope/internal/eventjson"
 	"github.com/ayberkyonar/axonscope/internal/eventstore"
+	"github.com/ayberkyonar/axonscope/internal/insight"
 )
 
 func newStatsCmd(opts *options) *cobra.Command {
@@ -36,7 +37,8 @@ func newStatsCmd(opts *options) *cobra.Command {
 			}
 			defer store.Close()
 
-			stats, err := store.Stats(cmd.Context(), query)
+			query.SkipTags = true // counting needs no tags
+			stats, err := insight.Summarize(store.Events(cmd.Context(), query))
 			if err != nil {
 				return err
 			}
@@ -56,7 +58,7 @@ func newStatsCmd(opts *options) *cobra.Command {
 
 // writeStatsText writes a summary line, then one line per event name with
 // the counts right-aligned.
-func writeStatsText(out io.Writer, stats eventstore.Stats) error {
+func writeStatsText(out io.Writer, stats insight.Stats) error {
 	if stats.Total == 0 {
 		_, err := fmt.Fprintln(out, "no events")
 		return err
