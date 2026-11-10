@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"iter"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -78,18 +79,26 @@ func TestPrintEventsShowsEventsBeforeError(t *testing.T) {
 	}
 }
 
-func TestShortName(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-	}{
-		{"com.example.events.AccountRegistered", "AccountRegistered"},
-		{"AccountRegistered", "AccountRegistered"},
-		{"", ""},
+func TestParseTags(t *testing.T) {
+	got, err := parseTags([]string{"userId=42", "email=a=b@c.nl", "empty="})
+	if err != nil {
+		t.Fatalf("parseTags returned error: %v", err)
 	}
-	for _, tt := range tests {
-		if got := shortName(tt.name); got != tt.want {
-			t.Errorf("shortName(%q) = %q, want %q", tt.name, got, tt.want)
+
+	want := []eventstore.Tag{
+		{Key: "userId", Value: "42"},
+		{Key: "email", Value: "a=b@c.nl"}, // only the first "=" separates key and value
+		{Key: "empty", Value: ""},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("parseTags = %v, want %v", got, want)
+	}
+}
+
+func TestParseTagsRejectsInvalid(t *testing.T) {
+	for _, raw := range []string{"userId", "=42"} {
+		if _, err := parseTags([]string{raw}); err == nil {
+			t.Errorf("parseTags(%q) returned no error", raw)
 		}
 	}
 }

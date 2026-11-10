@@ -14,27 +14,51 @@ import (
 )
 
 func newEventsCmd(cfg *eventstore.Config) *cobra.Command {
-	var from int64
+	var query eventstore.Query
+	var tags []string
 	var limit int
 
 	cmd := &cobra.Command{
 		Use:   "events",
 		Short: "List events, oldest first",
-		Args:  cobra.NoArgs,
+		Example: "  axonscope events --name AccountRegistered\n" +
+			"  axonscope events --tag userId=42 --limit 0",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			var err error
+			if query.Tags, err = parseTags(tags); err != nil {
+				return err
+			}
+
 			store, err := eventstore.Open(*cfg)
 			if err != nil {
 				return err
 			}
 			defer store.Close()
 
-			return printEvents(cmd.OutOrStdout(), store.Events(cmd.Context(), from), limit)
+			return printEvents(cmd.OutOrStdout(), store.Events(cmd.Context(), query), limit)
 		},
 	}
 
-	cmd.Flags().Int64Var(&from, "from", 0, "sequence of the first event to show")
-	cmd.Flags().IntVar(&limit, "limit", 20, "maximum number of events to show, 0 for all")
+	flags := cmd.Flags()
+	flags.Int64Var(&query.From, "from", 0, "sequence of the first event to show")
+	flags.StringArrayVar(&query.Names, "name", nil, "only show events with this name, full or short (repeatable)")
+	flags.StringArrayVar(&tags, "tag", nil, "only show events with this tag, as key=value (repeatable)")
+	flags.IntVar(&limit, "limit", 20, "maximum number of events to show, 0 for all")
 	return cmd
+}
+
+// parseTags parses tags written as "key=value".
+func parseTags(raw []string) ([]eventstore.Tag, error) {
+	tags := make([]eventstore.Tag, len(raw))
+	for i, s := range raw {
+		key, value, ok := strings.Cut(s, "=")
+		if !ok || key == "" {
+			return nil, fmt.Errorf("invalid tag %q: want key=value", s)
+		}
+		tags[i] = eventstore.Tag{Key: key, Value: value}
+	}
+	return tags, nil
 }
 
 // printEvents writes one aligned line per event, stopping after limit
@@ -50,7 +74,7 @@ func printEvents(out io.Writer, events iter.Seq2[eventstore.Event, error], limit
 			return err
 		}
 		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n",
-			e.Sequence, e.Timestamp.Format(time.DateTime), shortName(e.Name), formatTags(e.Tags))
+			e.Sequence, e.Timestamp.Format(time.DateTime), e.ShortName(), formatTags(e.Tags))
 
 		shown++
 		if shown == limit {
@@ -58,12 +82,6 @@ func printEvents(out io.Writer, events iter.Seq2[eventstore.Event, error], limit
 		}
 	}
 	return nil
-}
-
-// shortName strips the package from an event name:
-// "com.example.events.AccountRegistered" becomes "AccountRegistered".
-func shortName(name string) string {
-	return name[strings.LastIndex(name, ".")+1:]
 }
 
 // formatTags formats tags as "key=value key=value".

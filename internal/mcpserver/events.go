@@ -16,8 +16,10 @@ const (
 )
 
 type listEventsInput struct {
-	From  int64 `json:"from,omitempty" jsonschema:"sequence number of the first event, default 0"`
-	Limit int   `json:"limit,omitempty" jsonschema:"maximum number of events to return, default 20, at most 100"`
+	From  int64             `json:"from,omitempty" jsonschema:"sequence number of the first event, default 0"`
+	Limit int               `json:"limit,omitempty" jsonschema:"maximum number of events to return, default 20, at most 100"`
+	Names []string          `json:"names,omitempty" jsonschema:"only events with one of these names; full names and short names such as AccountRegistered both work"`
+	Tags  map[string]string `json:"tags,omitempty" jsonschema:"only events that have all of these tags, as key-value pairs such as userId: 42"`
 }
 
 type listEventsOutput struct {
@@ -49,7 +51,11 @@ func listEvents(ctx context.Context, store *eventstore.Store, in listEventsInput
 	}
 	limit = min(limit, maxLimit)
 
-	return collectPage(store.Events(ctx, in.From), limit)
+	query := eventstore.Query{From: in.From, Names: in.Names}
+	for key, value := range in.Tags {
+		query.Tags = append(query.Tags, eventstore.Tag{Key: key, Value: value})
+	}
+	return collectPage(store.Events(ctx, query), limit)
 }
 
 // collectPage reads up to limit events. It reads one extra event to find

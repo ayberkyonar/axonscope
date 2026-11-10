@@ -27,6 +27,12 @@ type Event struct {
 	Payload []byte
 }
 
+// ShortName returns the event name without its package:
+// "com.example.events.AccountRegistered" becomes "AccountRegistered".
+func (e Event) ShortName() string {
+	return shortName(e.Name)
+}
+
 // Tag links an event to a domain concept, such as userId=123.
 // Applications use tags to find the events that belong together.
 type Tag struct {
@@ -34,19 +40,19 @@ type Tag struct {
 	Value string
 }
 
-// Events returns the events from sequence from onward, oldest first,
+// Events returns the events selected by q, oldest first,
 // up to the event store's current head.
 //
 // Range over the result to read the events. Stopping early is cheap:
 // the stream is closed and no further events are fetched.
 // After an error, the iteration stops.
-func (s *Store) Events(ctx context.Context, from int64) iter.Seq2[Event, error] {
+func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 	return func(yield func(Event, error) bool) {
 		// Cancelling the context closes the stream, also when the caller stops early.
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		stream, err := s.events.Source(ctx, &axonpb.SourceEventsRequest{FromSequence: from})
+		stream, err := s.events.Source(ctx, q.request())
 		if err != nil {
 			yield(Event{}, fmt.Errorf("read events: %w", err))
 			return
@@ -65,6 +71,10 @@ func (s *Store) Events(ctx context.Context, from int64) iter.Seq2[Event, error] 
 			sequenced := resp.GetEvent()
 			if sequenced == nil {
 				continue // a consistency marker, which only matters for appending
+			}
+			// Checked before toEvent, so skipped events cost no extra call for their tags.
+			if !q.matchesName(sequenced.GetEvent().GetName()) {
+				continue
 			}
 
 			event, err := s.toEvent(ctx, sequenced)

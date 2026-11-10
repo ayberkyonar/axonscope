@@ -37,7 +37,8 @@ func addTools(server *mcp.Server, store *eventstore.Store) {
 		Name: "list_events",
 		Description: "List events oldest first, starting at a sequence number. " +
 			"Each event has a type name, timestamp, tags (domain identifiers such as userId), metadata and a payload. " +
-			"If more events exist, the result contains 'next': pass it as 'from' to read the following page.",
+			"Filter by event names and tags to find everything that happened to one entity, e.g. tags {\"userId\": \"42\"}. " +
+			"If more events match, the result contains 'next': call again with the same filters and 'next' as 'from'.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listEventsInput) (*mcp.CallToolResult, listEventsOutput, error) {
 		out, err := listEvents(ctx, store, in)
