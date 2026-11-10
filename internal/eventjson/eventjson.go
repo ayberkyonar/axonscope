@@ -1,5 +1,5 @@
-// Package eventjson defines the JSON form of events. The CLI and the MCP
-// server both use it, so they always output the same shape.
+// Package eventjson defines the JSON form of events and event statistics.
+// The CLI and the MCP server both use it, so they always output the same shape.
 package eventjson
 
 import (
@@ -39,11 +39,42 @@ func From(e eventstore.Event) Event {
 		ID:        e.ID,
 		Name:      e.Name,
 		Version:   e.Version,
-		Timestamp: e.Timestamp.UTC().Format(time.RFC3339Nano),
+		Timestamp: formatTime(e.Timestamp),
 		Tags:      tags,
 		Metadata:  e.Metadata,
 		Payload:   decodePayload(e.Payload),
 	}
+}
+
+// Stats is the JSON form of eventstore.Stats.
+type Stats struct {
+	Total  int         `json:"total"`
+	First  string      `json:"first,omitempty" jsonschema:"timestamp of the oldest counted event; absent when there are none"`
+	Last   string      `json:"last,omitempty" jsonschema:"timestamp of the newest counted event; absent when there are none"`
+	ByName []NameCount `json:"byName" jsonschema:"number of events per name, most frequent first"`
+}
+
+// NameCount is the JSON form of eventstore.NameCount.
+type NameCount struct {
+	Name  string `json:"name"`
+	Count int    `json:"count"`
+}
+
+// FromStats converts stats to their JSON form.
+func FromStats(s eventstore.Stats) Stats {
+	out := Stats{Total: s.Total, ByName: make([]NameCount, len(s.ByName))}
+	if s.Total > 0 {
+		out.First = formatTime(s.First)
+		out.Last = formatTime(s.Last)
+	}
+	for i, nc := range s.ByName {
+		out.ByName[i] = NameCount{Name: nc.Name, Count: nc.Count}
+	}
+	return out
+}
+
+func formatTime(t time.Time) string {
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 // decodePayload returns the payload as a JSON value, so it is embedded as

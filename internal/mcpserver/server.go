@@ -4,6 +4,7 @@ package mcpserver
 
 import (
 	"context"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -35,10 +36,28 @@ func addTools(server *mcp.Server, store *eventstore.Store) {
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name: "event_stats",
+		Description: "Count events per event type, most frequent first, with the time of the oldest and newest event. " +
+			"Use this first to get an overview of what happens in a period, then list_events for details. " +
+			"It reads every matching event, so on a large event store set 'since', e.g. '7d' for the last week.",
+		Annotations: readOnly,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in filterInput) (*mcp.CallToolResult, eventjson.Stats, error) {
+		query, err := in.query(time.Now())
+		if err != nil {
+			return nil, eventjson.Stats{}, err
+		}
+		stats, err := store.Stats(ctx, query)
+		if err != nil {
+			return nil, eventjson.Stats{}, err
+		}
+		return nil, eventjson.FromStats(stats), nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name: "list_events",
 		Description: "List events oldest first, starting at a sequence number. " +
 			"Each event has a type name, timestamp, tags (domain identifiers such as userId), metadata and a payload. " +
-			"Filter by event names and tags to find everything that happened to one entity, e.g. tags {\"userId\": \"42\"}. " +
+			"Filter by event names, tags and time to find what happened, e.g. tags {\"userId\": \"42\"} and since '24h'. " +
 			"If more events match, the result contains 'next': call again with the same filters and 'next' as 'from'.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listEventsInput) (*mcp.CallToolResult, listEventsOutput, error) {

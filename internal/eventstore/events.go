@@ -55,9 +55,34 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 		ctx, cancel := context.WithCancel(ctx)
 		defer cancel()
 
+		for sequenced, err := range s.selected(ctx, q) {
+			if err != nil {
+				yield(Event{}, err)
+				return
+			}
+			event, err := s.toEvent(ctx, sequenced)
+			if !yield(event, err) || err != nil {
+				return
+			}
+		}
+	}
+}
+
+// selected returns the events selected by q as Axon Server sends them,
+// without their tags. Filters Axon Server cannot apply are applied here,
+// before anyone spends a call on an event's tags.
+func (s *Store) selected(ctx context.Context, q Query) iter.Seq2[*axonpb.SequencedEvent, error] {
+	return func(yield func(*axonpb.SequencedEvent, error) bool) {
+		from, err := s.startSequence(ctx, q)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+		q.From = from // q is a copy, so this does not affect the caller
+
 		stream, err := s.events.Source(ctx, q.request())
 		if err != nil {
-			yield(Event{}, s.rpcError("read events", err))
+			yield(nil, s.rpcError("read events", err))
 			return
 		}
 
@@ -68,7 +93,7 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 				return
 			}
 			if err != nil {
-				yield(Event{}, s.rpcError("read events", err))
+				yield(nil, s.rpcError("read events", err))
 				return
 			}
 
@@ -76,17 +101,34 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 			if sequenced == nil {
 				continue // a consistency marker, which only matters for appending
 			}
-			// Checked before toEvent, so skipped events cost no extra call for their tags.
-			if !q.matchesName(sequenced.GetEvent().GetName()) {
+			e := sequenced.GetEvent()
+			timestamp := time.UnixMilli(e.GetTimestamp())
+			if q.pastUntil(timestamp) {
+				return
+			}
+			if q.beforeSince(timestamp) || !q.matchesName(e.GetName()) {
 				continue
 			}
-
-			event, err := s.toEvent(ctx, sequenced)
-			if !yield(event, err) || err != nil {
+			if !yield(sequenced, nil) {
 				return
 			}
 		}
 	}
+}
+
+// startSequence returns the sequence number to start reading at: q.From,
+// or later when q.Since allows skipping older events.
+func (s *Store) startSequence(ctx context.Context, q Query) (int64, error) {
+	if q.Since.IsZero() {
+		return q.From, nil
+	}
+	resp, err := s.events.GetSequenceAt(ctx, &axonpb.GetSequenceAtRequest{Timestamp: q.Since.UnixMilli()})
+	if err != nil {
+		return 0, s.rpcError("find events since "+q.Since.Format(time.RFC3339), err)
+	}
+	// Axon Server's answer is approximate: it can be one event too far.
+	// Starting one earlier is safe, because older events are skipped while reading.
+	return max(q.From, resp.GetSequence()-1), nil
 }
 
 // ErrNotFound means no event exists at the requested sequence number.

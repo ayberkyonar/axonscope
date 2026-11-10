@@ -5,6 +5,7 @@ import (
 	"iter"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/ayberkyonar/axonscope/internal/eventstore"
 )
@@ -74,4 +75,34 @@ func deref(p *int64) any {
 		return nil
 	}
 	return *p
+}
+
+func TestFilterInputQuery(t *testing.T) {
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	in := filterInput{
+		Names: []string{"LoggedOut"},
+		Tags:  map[string]string{"userId": "42"},
+		Since: "24h",
+	}
+
+	q, err := in.query(now)
+	if err != nil {
+		t.Fatalf("query returned error: %v", err)
+	}
+
+	if len(q.Names) != 1 || !reflect.DeepEqual(q.Tags, []eventstore.Tag{{Key: "userId", Value: "42"}}) {
+		t.Errorf("filters not passed on: %+v", q)
+	}
+	if want := now.Add(-24 * time.Hour); !q.Since.Equal(want) {
+		t.Errorf("Since = %v, want %v", q.Since, want)
+	}
+	if !q.Until.IsZero() {
+		t.Errorf("Until = %v, want zero", q.Until)
+	}
+}
+
+func TestFilterInputQueryRejectsInvalidTime(t *testing.T) {
+	if _, err := (filterInput{Since: "last week"}).query(time.Now()); err == nil {
+		t.Error("query returned no error")
+	}
 }

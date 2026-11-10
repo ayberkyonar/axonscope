@@ -3,6 +3,7 @@ package eventstore
 import (
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/ayberkyonar/axonscope/internal/eventstore/internal/axonpb"
 )
@@ -23,6 +24,22 @@ type Query struct {
 
 	// Tags selects events that have all of these tags.
 	Tags []Tag
+
+	// Since selects events at or after this time. Zero means no lower bound.
+	Since time.Time
+	// Until selects events before this time. Zero means no upper bound.
+	//
+	// Reading stops at the first event at or after Until. This assumes
+	// timestamps grow with sequence numbers, as they do in a normal event store.
+	Until time.Time
+}
+
+func (q Query) beforeSince(t time.Time) bool {
+	return t.Before(q.Since)
+}
+
+func (q Query) pastUntil(t time.Time) bool {
+	return !q.Until.IsZero() && !t.Before(q.Until)
 }
 
 // request builds the Axon Server request for q. Filters Axon Server cannot
