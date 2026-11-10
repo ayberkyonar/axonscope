@@ -27,9 +27,31 @@ func TestRPCError(t *testing.T) {
 			want: `context "orders" is not a DCB event store`,
 		},
 		{
+			name: "missing or invalid token",
+			err:  status.Error(codes.PermissionDenied, "Invalid token"),
+			want: "access denied by Axon Server at localhost:9999",
+		},
+		{
+			name: "server uses TLS, we don't",
+			err:  status.Error(codes.Unavailable, `connection error: desc = "error reading server preface: EOF"`),
+			want: "it may require TLS",
+		},
+		{
+			name: "we use TLS, server doesn't",
+			err: status.Error(codes.Unavailable, `connection error: desc = "transport: authentication handshake failed: `+
+				`tls: first record does not look like a TLS handshake"`),
+			want: "no TLS on Axon Server at localhost:9999",
+		},
+		{
+			name: "server certificate not trusted",
+			err: status.Error(codes.Unavailable, `connection error: desc = "transport: authentication handshake failed: `+
+				`tls: failed to verify certificate: x509: certificate signed by unknown authority"`),
+			want: "not trusted (certificate signed by unknown authority)",
+		},
+		{
 			name: "other errors keep the operation and server message",
-			err:  status.Error(codes.PermissionDenied, "no access"),
-			want: "get head: no access (PermissionDenied)",
+			err:  status.Error(codes.Internal, "disk full"),
+			want: "get head: disk full (Internal)",
 		},
 	}
 	for _, tt := range tests {

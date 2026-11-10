@@ -4,6 +4,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -14,6 +15,9 @@ import (
 func Execute(ctx context.Context) error {
 	return newRootCmd().ExecuteContext(ctx)
 }
+
+// tokenEnv is the environment variable holding the Axon Server access token.
+const tokenEnv = "AXONSCOPE_TOKEN"
 
 // options holds the global flags, shared by all commands.
 type options struct {
@@ -31,12 +35,17 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "axonscope",
 		Short: "Inspect Axon Server event stores (read-only)",
+		Long: "Inspect Axon Server event stores (read-only).\n\n" +
+			"If Axon Server has access control enabled, set the " + tokenEnv + " environment\n" +
+			"variable to an access token. Use a token that is only allowed to read.",
 		// Print only the error on failure, not the full usage text.
 		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if opts.output != "text" && opts.output != "json" {
 				return fmt.Errorf("invalid output %q: want text or json", opts.output)
 			}
+			// Read from the environment, not a flag: flags end up in shell history.
+			opts.store.Token = os.Getenv(tokenEnv)
 			return nil
 		},
 	}
@@ -44,6 +53,8 @@ func newRootCmd() *cobra.Command {
 	flags := root.PersistentFlags()
 	flags.StringVar(&opts.store.Address, "server", "localhost:8124", "Axon Server gRPC address (host:port)")
 	flags.StringVar(&opts.store.Context, "context", "default", "Axon Server context")
+	flags.BoolVar(&opts.store.TLS, "tls", false, "encrypt the connection with TLS")
+	flags.StringVar(&opts.store.CACertFile, "ca-cert", "", "PEM file of the CA that signed the server's certificate (implies --tls)")
 	flags.StringVarP(&opts.output, "output", "o", "text", "output format: text or json")
 
 	root.AddCommand(newHeadCmd(opts), newEventsCmd(opts), newEventCmd(opts), newMCPCmd(opts))
