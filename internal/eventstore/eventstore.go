@@ -26,6 +26,7 @@ type Config struct {
 // Store is a read-only connection to one Axon Server context.
 // Close it when you are done.
 type Store struct {
+	cfg    Config
 	conn   *grpc.ClientConn
 	events axonpb.DcbEventStoreClient
 }
@@ -56,7 +57,7 @@ func Open(cfg Config) (*Store, error) {
 		return nil, fmt.Errorf("connect to %s: %w", cfg.Address, err)
 	}
 
-	return &Store{conn: conn, events: axonpb.NewDcbEventStoreClient(conn)}, nil
+	return &Store{cfg: cfg, conn: conn, events: axonpb.NewDcbEventStoreClient(conn)}, nil
 }
 
 // Head returns the sequence number the next appended event will get.
@@ -64,7 +65,7 @@ func Open(cfg Config) (*Store, error) {
 func (s *Store) Head(ctx context.Context) (int64, error) {
 	resp, err := s.events.GetHead(ctx, &axonpb.GetHeadRequest{})
 	if err != nil {
-		return 0, fmt.Errorf("get head: %w", err)
+		return 0, s.rpcError("get head", err)
 	}
 	return resp.GetSequence(), nil
 }

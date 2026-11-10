@@ -57,7 +57,7 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 
 		stream, err := s.events.Source(ctx, q.request())
 		if err != nil {
-			yield(Event{}, fmt.Errorf("read events: %w", err))
+			yield(Event{}, s.rpcError("read events", err))
 			return
 		}
 
@@ -68,7 +68,7 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 				return
 			}
 			if err != nil {
-				yield(Event{}, fmt.Errorf("read events: %w", err))
+				yield(Event{}, s.rpcError("read events", err))
 				return
 			}
 
@@ -112,7 +112,7 @@ func (s *Store) Event(ctx context.Context, sequence int64) (Event, error) {
 func (s *Store) toEvent(ctx context.Context, sequenced *axonpb.SequencedEvent) (Event, error) {
 	resp, err := s.events.GetTags(ctx, &axonpb.GetTagsRequest{Sequence: sequenced.GetSequence()})
 	if err != nil {
-		return Event{}, fmt.Errorf("read tags of event %d: %w", sequenced.GetSequence(), err)
+		return Event{}, s.rpcError(fmt.Sprintf("read tags of event %d", sequenced.GetSequence()), err)
 	}
 
 	tags := make([]Tag, len(resp.GetTag()))
