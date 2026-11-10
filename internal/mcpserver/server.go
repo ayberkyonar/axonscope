@@ -7,6 +7,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/ayberkyonar/axonscope/internal/eventjson"
 	"github.com/ayberkyonar/axonscope/internal/eventstore"
 )
 
@@ -43,6 +44,18 @@ func addTools(server *mcp.Server, store *eventstore.Store) {
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in listEventsInput) (*mcp.CallToolResult, listEventsOutput, error) {
 		out, err := listEvents(ctx, store, in)
 		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "get_event",
+		Description: "Get one event by its sequence number, with its tags, metadata and payload.",
+		Annotations: readOnly,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getEventInput) (*mcp.CallToolResult, eventjson.Event, error) {
+		e, err := store.Event(ctx, in.Sequence)
+		if err != nil {
+			return nil, eventjson.Event{}, err
+		}
+		return nil, eventjson.From(e), nil
 	})
 }
 

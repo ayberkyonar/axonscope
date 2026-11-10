@@ -7,7 +7,7 @@ import (
 	"github.com/ayberkyonar/axonscope/internal/mcpserver"
 )
 
-func newMCPCmd(cfg *eventstore.Config) *cobra.Command {
+func newMCPCmd(opts *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "mcp",
 		Short: "Run an MCP server over stdin/stdout, for AI agents",
@@ -15,7 +15,7 @@ func newMCPCmd(cfg *eventstore.Config) *cobra.Command {
 			"An MCP client such as Claude Code starts this command itself; you don't run it by hand.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			store, err := eventstore.Open(*cfg)
+			store, err := eventstore.Open(opts.store)
 			if err != nil {
 				return err
 			}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"iter"
 	"reflect"
@@ -40,10 +41,10 @@ var testEvents = []eventstore.Event{
 	},
 }
 
-func TestPrintEvents(t *testing.T) {
+func TestWriteEventsText(t *testing.T) {
 	var out strings.Builder
-	if err := printEvents(&out, fakeEvents(testEvents, nil), 0); err != nil {
-		t.Fatalf("printEvents returned error: %v", err)
+	if err := writeEventsText(&out, fakeEvents(testEvents, nil)); err != nil {
+		t.Fatalf("writeEventsText returned error: %v", err)
 	}
 
 	want := "" +
@@ -54,22 +55,51 @@ func TestPrintEvents(t *testing.T) {
 	}
 }
 
-func TestPrintEventsStopsAtLimit(t *testing.T) {
+func TestWriteEventsJSONWritesOneObjectPerLine(t *testing.T) {
 	var out strings.Builder
-	if err := printEvents(&out, fakeEvents(testEvents, nil), 1); err != nil {
-		t.Fatalf("printEvents returned error: %v", err)
+	if err := writeEventsJSON(&out, fakeEvents(testEvents, nil)); err != nil {
+		t.Fatalf("writeEventsJSON returned error: %v", err)
 	}
 
-	if lines := strings.Count(out.String(), "\n"); lines != 1 {
-		t.Errorf("got %d lines, want 1:\n%s", lines, out.String())
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != len(testEvents) {
+		t.Fatalf("got %d lines, want %d:\n%s", len(lines), len(testEvents), out.String())
+	}
+	for i, line := range lines {
+		var e struct{ Sequence int64 }
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			t.Errorf("line %d is not valid JSON: %v", i, err)
+		} else if e.Sequence != testEvents[i].Sequence {
+			t.Errorf("line %d has sequence %d, want %d", i, e.Sequence, testEvents[i].Sequence)
+		}
 	}
 }
 
-func TestPrintEventsShowsEventsBeforeError(t *testing.T) {
+func TestFirstN(t *testing.T) {
+	tests := []struct {
+		n    int
+		want int
+	}{
+		{0, 2}, // 0 means no limit
+		{1, 1},
+		{5, 2},
+	}
+	for _, tt := range tests {
+		count := 0
+		for range firstN(fakeEvents(testEvents, nil), tt.n) {
+			count++
+		}
+		if count != tt.want {
+			t.Errorf("firstN(2 events, %d) gave %d events, want %d", tt.n, count, tt.want)
+		}
+	}
+}
+
+func TestWriteEventsTextShowsEventsBeforeError(t *testing.T) {
 	readErr := errors.New("connection lost")
 	var out strings.Builder
 
-	err := printEvents(&out, fakeEvents(testEvents[:1], readErr), 0)
+	err := writeEventsText(&out, fakeEvents(testEvents[:1], readErr))
 
 	if !errors.Is(err, readErr) {
 		t.Errorf("got error %v, want %v", err, readErr)

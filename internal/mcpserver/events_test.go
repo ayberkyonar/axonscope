@@ -34,7 +34,7 @@ func TestCollectPage(t *testing.T) {
 	}{
 		{"fewer events than limit", []int64{0, 1}, 5, []int64{0, 1}, nil},
 		{"exactly limit events", []int64{0, 1}, 2, []int64{0, 1}, nil},
-		{"more events than limit", []int64{0, 1, 2}, 2, []int64{0, 1}, ptr(int64(2))},
+		{"more events than limit", []int64{0, 1, 2}, 2, []int64{0, 1}, new(int64(2))},
 		{"no events", nil, 5, []int64{}, nil},
 	}
 	for _, tt := range tests {
@@ -67,24 +67,6 @@ func TestCollectPageReturnsError(t *testing.T) {
 		t.Errorf("got error %v, want %v", err, readErr)
 	}
 }
-
-func TestDecodePayload(t *testing.T) {
-	tests := []struct {
-		payload string
-		want    any
-	}{
-		{`{"userId":"42"}`, map[string]any{"userId": "42"}},
-		{`not json`, "not json"},
-		{``, ""},
-	}
-	for _, tt := range tests {
-		if got := decodePayload([]byte(tt.payload)); !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("decodePayload(%q) = %#v, want %#v", tt.payload, got, tt.want)
-		}
-	}
-}
-
-func ptr[T any](v T) *T { return &v }
 
 // deref makes test failures print the value instead of a memory address.
 func deref(p *int64) any {

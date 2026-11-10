@@ -8,6 +8,9 @@ import (
 	"iter"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/ayberkyonar/axonscope/internal/eventstore/internal/axonpb"
 )
 
@@ -60,7 +63,8 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 
 		for {
 			resp, err := stream.Recv()
-			if errors.Is(err, io.EOF) {
+			// Axon Server rejects a start past the head; for us that just means no events.
+			if errors.Is(err, io.EOF) || status.Code(err) == codes.OutOfRange {
 				return
 			}
 			if err != nil {
@@ -83,6 +87,24 @@ func (s *Store) Events(ctx context.Context, q Query) iter.Seq2[Event, error] {
 			}
 		}
 	}
+}
+
+// ErrNotFound means no event exists at the requested sequence number.
+var ErrNotFound = errors.New("event not found")
+
+// Event returns the event at the given sequence number,
+// or an error wrapping ErrNotFound if there is none.
+func (s *Store) Event(ctx context.Context, sequence int64) (Event, error) {
+	for e, err := range s.Events(ctx, Query{From: sequence}) {
+		if err != nil {
+			return Event{}, err
+		}
+		if e.Sequence == sequence {
+			return e, nil
+		}
+		break // the first event is past sequence, so it does not exist
+	}
+	return Event{}, fmt.Errorf("event %d: %w", sequence, ErrNotFound)
 }
 
 // toEvent converts a protobuf event to an Event.
