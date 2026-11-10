@@ -41,9 +41,7 @@ func newEventCmd(opts *options) *cobra.Command {
 			}
 
 			if opts.jsonOutput() {
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				return enc.Encode(eventjson.From(e))
+				return writeJSON(cmd.OutOrStdout(), eventjson.From(e))
 			}
 			return writeEventText(cmd.OutOrStdout(), e)
 		},

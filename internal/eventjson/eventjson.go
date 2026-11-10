@@ -47,12 +47,43 @@ func From(e eventstore.Event) Event {
 	}
 }
 
-// Stats is the JSON form of insight.Stats.
+// Stats is the JSON form of insight.Stats, or of insight.TagStats when
+// counting per tag value: then ByTag is set instead of ByName.
 type Stats struct {
 	Total  int         `json:"total"`
 	First  string      `json:"first,omitempty" jsonschema:"timestamp of the oldest counted event; absent when there are none"`
 	Last   string      `json:"last,omitempty" jsonschema:"timestamp of the newest counted event; absent when there are none"`
-	ByName []NameCount `json:"byName" jsonschema:"number of events per name, most frequent first"`
+	ByName []NameCount `json:"byName,omitempty" jsonschema:"number of events per name, most frequent first"`
+	ByTag  *TagGroups  `json:"byTag,omitempty" jsonschema:"number of events per value of one tag, when counting by tag"`
+}
+
+// TagGroups is the JSON form of the per-value counts in insight.TagStats.
+type TagGroups struct {
+	Key      string     `json:"key"`
+	Distinct int        `json:"distinct" jsonschema:"number of different values of the tag"`
+	Top      []TagCount `json:"top" jsonschema:"the most frequent values, most frequent first"`
+	Untagged int        `json:"untagged" jsonschema:"number of counted events without this tag"`
+	Partial  bool       `json:"partial" jsonschema:"true when only the first 'total' events were read because of the event limit: counts are incomplete, narrow the selection for a full answer"`
+}
+
+// TagCount is the JSON form of insight.TagCount.
+type TagCount struct {
+	Value string `json:"value"`
+	Count int    `json:"count"`
+}
+
+// FromTagStats converts per-tag counts to their JSON form.
+func FromTagStats(s insight.TagStats) Stats {
+	groups := &TagGroups{Key: s.Key, Distinct: s.Distinct, Top: make([]TagCount, len(s.Top)), Untagged: s.Untagged, Partial: s.Partial}
+	for i, tc := range s.Top {
+		groups.Top[i] = TagCount{Value: tc.Value, Count: tc.Count}
+	}
+	out := Stats{Total: s.Total, ByTag: groups}
+	if s.Total > 0 {
+		out.First = formatTime(s.First)
+		out.Last = formatTime(s.Last)
+	}
+	return out
 }
 
 // NameCount is the JSON form of insight.NameCount.

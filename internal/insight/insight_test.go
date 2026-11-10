@@ -191,3 +191,63 @@ func TestParseUnit(t *testing.T) {
 		t.Error(`ParseUnit("month") returned no error`)
 	}
 }
+
+func tagged(t time.Time, tags ...string) eventstore.Event {
+	e := eventstore.Event{Name: "Placed", Timestamp: t}
+	for _, tag := range tags {
+		key, value, _ := strings.Cut(tag, "=")
+		e.Tags = append(e.Tags, eventstore.Tag{Key: key, Value: value})
+	}
+	return e
+}
+
+func TestGroupByTag(t *testing.T) {
+	t0 := time.Date(2026, 11, 5, 20, 0, 0, 0, time.UTC)
+	stream := events(nil,
+		tagged(t0, "customerId=c1", "orderId=o1"),
+		tagged(t0, "customerId=c2"),
+		tagged(t0, "customerId=c1"),
+		tagged(t0, "orderId=o9"), // no customerId
+		tagged(t0.Add(time.Hour), "customerId=c3"),
+	)
+
+	got, err := GroupByTag(stream, "customerId", 2, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := TagStats{
+		Key: "customerId", Total: 5, First: t0, Last: t0.Add(time.Hour),
+		Distinct: 3,
+		Top:      []TagCount{{"c1", 2}, {"c2", 1}}, // c2 before c3: same count, alphabetical
+		Untagged: 1,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+}
+
+func TestGroupByTagStopsAtTheLimit(t *testing.T) {
+	t0 := time.Date(2026, 11, 5, 20, 0, 0, 0, time.UTC)
+	stream := events(nil, tagged(t0, "k=a"), tagged(t0, "k=a"), tagged(t0, "k=b"))
+
+	got, err := GroupByTag(stream, "k", 10, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Partial || got.Total != 2 || !reflect.DeepEqual(got.Top, []TagCount{{"a", 2}}) {
+		t.Errorf("got %+v, want 2 events read, partial, only a counted", got)
+	}
+
+	exact, _ := GroupByTag(events(nil, tagged(t0, "k=a"), tagged(t0, "k=a")), "k", 10, 2)
+	if exact.Partial {
+		t.Error("reading exactly the limit, with no more events, must not be partial")
+	}
+}
+
+func TestGroupByTagReturnsError(t *testing.T) {
+	readErr := errors.New("connection lost")
+	if _, err := GroupByTag(events(readErr), "k", 10, 0); !errors.Is(err, readErr) {
+		t.Errorf("got error %v, want %v", err, readErr)
+	}
+}

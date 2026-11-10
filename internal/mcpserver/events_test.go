@@ -158,3 +158,19 @@ func TestTrendInputReadsDatesInItsTimeZone(t *testing.T) {
 		t.Errorf("To = %v, want %v", periods.To.UTC(), want)
 	}
 }
+
+func TestStatsInputLimits(t *testing.T) {
+	tests := []struct {
+		in             statsInput
+		top, maxEvents int
+	}{
+		{statsInput{}, 10, insight.DefaultMaxEvents},
+		{statsInput{Top: 5, MaxEvents: 500}, 5, 500},
+		{statsInput{Top: 1000, MaxEvents: 10_000_000}, 100, 100_000}, // capped
+	}
+	for _, tt := range tests {
+		if top, maxEvents := tt.in.limits(); top != tt.top || maxEvents != tt.maxEvents {
+			t.Errorf("%+v.limits() = %d, %d; want %d, %d", tt.in, top, maxEvents, tt.top, tt.maxEvents)
+		}
+	}
+}

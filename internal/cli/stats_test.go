@@ -76,3 +76,29 @@ func TestQueryFlagsNamesTheBadFlag(t *testing.T) {
 		t.Errorf("got error %v, want one starting with --until:", err)
 	}
 }
+
+func TestWriteTagStatsText(t *testing.T) {
+	at := time.Date(2026, 11, 5, 20, 0, 0, 0, time.Local)
+	stats := insight.TagStats{
+		Key: "customerId", Total: 10000, First: at, Last: at.Add(time.Hour), Distinct: 187,
+		Top:      []insight.TagCount{{Value: "c-1042", Count: 123}, {Value: "c-0007", Count: 17}},
+		Untagged: 4, Partial: true,
+	}
+
+	var out strings.Builder
+	if err := writeTagStatsText(&out, stats); err != nil {
+		t.Fatalf("writeTagStatsText returned error: %v", err)
+	}
+
+	want := "" +
+		"10000 events from 2026-11-05 20:00:00 to 2026-11-05 21:00:00, 187 different customerId values\n" +
+		"Only the first 10000 events were counted. For a complete answer, narrow it down " +
+		"with --since, --name or --tag, or raise --max-events.\n" +
+		"\n" +
+		"123  c-1042\n" +
+		" 17  c-0007\n" +
+		"  4  (no customerId tag)\n"
+	if out.String() != want {
+		t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", out.String(), want)
+	}
+}

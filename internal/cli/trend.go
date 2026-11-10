@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -64,9 +63,7 @@ func newTrendCmd(opts *options) *cobra.Command {
 			}
 
 			if opts.jsonOutput() {
-				enc := json.NewEncoder(cmd.OutOrStdout())
-				enc.SetIndent("", "  ")
-				return enc.Encode(eventjson.FromTrend(unit, loc, buckets))
+				return writeJSON(cmd.OutOrStdout(), eventjson.FromTrend(unit, loc, buckets))
 			}
 			return writeTrendText(cmd.OutOrStdout(), unit, buckets)
 		},

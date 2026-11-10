@@ -60,8 +60,8 @@ func TestFromStatsWithoutEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// No first/last times, and an empty list rather than null.
-	if want := `{"total":0,"byName":[]}`; string(got) != want {
+	// No first/last times and no counts.
+	if want := `{"total":0}`; string(got) != want {
 		t.Errorf("got %s, want %s", got, want)
 	}
 }
@@ -99,6 +99,25 @@ func TestFromTrend(t *testing.T) {
 	want := `{"unit":"day","timeZone":"CET","periods":[` +
 		`{"start":"2026-11-05T00:00:00+01:00","total":2,"byName":[{"name":"com.example.Placed","count":2}]},` +
 		`{"start":"2026-11-06T00:00:00+01:00","total":0}]}`
+	if string(got) != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}
+
+func TestFromTagStats(t *testing.T) {
+	at := time.Date(2026, 11, 5, 20, 0, 0, 0, time.UTC)
+	stats := insight.TagStats{
+		Key: "customerId", Total: 3, First: at, Last: at, Distinct: 2,
+		Top: []insight.TagCount{{Value: "c1", Count: 2}}, Untagged: 0, Partial: true,
+	}
+
+	got, err := json.Marshal(FromTagStats(stats))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `{"total":3,"first":"2026-11-05T20:00:00Z","last":"2026-11-05T20:00:00Z",` +
+		`"byTag":{"key":"customerId","distinct":2,"top":[{"value":"c1","count":2}],"untagged":0,"partial":true}}`
 	if string(got) != want {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}

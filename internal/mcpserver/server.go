@@ -39,9 +39,11 @@ func addTools(server *mcp.Server, store *eventstore.Store) {
 		Name: "event_stats",
 		Description: "Count events per event type, most frequent first, with the time of the oldest and newest event. " +
 			"Use this first to get an overview of what happens in a period, then list_events for details. " +
-			"It reads every matching event, so on a large event store set 'since', e.g. '7d' for the last week.",
+			"With 'byTag' (e.g. customerId) it counts per tag value instead, to find the most active customers, users or orders. " +
+			"It reads every matching event, so on a large event store set 'since', e.g. '7d' for the last week. " +
+			"Counting by tag stops after 'maxEvents' events; if the result says partial, tell the user the counts are incomplete.",
 		Annotations: readOnly,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in filterInput) (*mcp.CallToolResult, eventjson.Stats, error) {
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in statsInput) (*mcp.CallToolResult, eventjson.Stats, error) {
 		out, err := eventStats(ctx, store, in, time.Now())
 		return nil, out, err
 	})

@@ -3,7 +3,9 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -59,4 +61,12 @@ func newRootCmd() *cobra.Command {
 
 	root.AddCommand(newHeadCmd(opts), newEventsCmd(opts), newEventCmd(opts), newStatsCmd(opts), newTrendCmd(opts), newMCPCmd(opts))
 	return root
+}
+
+// writeJSON writes v as indented JSON, for output that is one value
+// rather than a stream of lines.
+func writeJSON(out io.Writer, v any) error {
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
 }
