@@ -3,8 +3,11 @@
 version: v2
 
 inputs:
+  # Tag axon-server-api-2026.1.0, the last release under the Apache License 2.0
+  # (see LICENSE.txt in this folder). Later versions are under the Axoniq Terms
+  # of Service, so check their license before updating.
   - git_repo: https://github.com/AxonIQ/axon-server-api.git
-    commit: f8cc9441469aeeea5dbd90a80cdf9ee5dd819099
+    commit: a5b22b33408ce9ae0282c61be889250a85345438
     subdir: src/main/proto
     paths:
       - common.proto
