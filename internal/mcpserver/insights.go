@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -38,7 +39,7 @@ func eventStats(ctx context.Context, store *eventstore.Store, in statsInput, now
 	}
 
 	if in.ByTag != "" {
-		top, maxEvents := in.limits()
+		top, maxEvents := limits(in.Top, in.MaxEvents)
 		stats, err := insight.GroupByTag(store.Events(ctx, query), in.ByTag, top, maxEvents)
 		if err != nil {
 			return eventjson.Stats{}, err
@@ -54,10 +55,41 @@ func eventStats(ctx context.Context, store *eventstore.Store, in statsInput, now
 	return eventjson.FromStats(stats), nil
 }
 
-// limits returns how many tag values to return and how many events to read,
+type journeysInput struct {
+	filterInput
+	ByTag        string `json:"byTag" jsonschema:"the tag that ties events into one journey, like orderId or userId"`
+	Containing   string `json:"containing,omitempty" jsonschema:"only journeys with an event of this name, like OrderCancelled"`
+	StartingWith string `json:"startingWith,omitempty" jsonschema:"only journeys whose first event has this name; leaves out journeys that began before 'since'"`
+	Top          int    `json:"top,omitempty" jsonschema:"how many of the most common paths to return, default 10, at most 100"`
+	MaxEvents    int    `json:"maxEvents,omitempty" jsonschema:"stop after this many events, default 10000, at most 100000"`
+}
+
+// journeyExamples is how many example tag values to return per path.
+const journeyExamples = 3
+
+func eventJourneys(ctx context.Context, store *eventstore.Store, in journeysInput, now time.Time) (eventjson.Journeys, error) {
+	if in.ByTag == "" {
+		return eventjson.Journeys{}, errors.New("byTag is required: the tag that ties events into one journey, like orderId")
+	}
+	query, err := in.query(now)
+	if err != nil {
+		return eventjson.Journeys{}, err
+	}
+
+	top, maxEvents := limits(in.Top, in.MaxEvents)
+	journeys, err := insight.FindJourneys(store.Events(ctx, query), insight.JourneyOptions{
+		Key: in.ByTag, Containing: in.Containing, StartingWith: in.StartingWith,
+		Top: top, Examples: journeyExamples, MaxEvents: maxEvents,
+	})
+	if err != nil {
+		return eventjson.Journeys{}, err
+	}
+	return eventjson.FromJourneys(journeys), nil
+}
+
+// limits returns how many results to return and how many events to read,
 // using the defaults for zero and capping both.
-func (in statsInput) limits() (top, maxEvents int) {
-	top, maxEvents = in.Top, in.MaxEvents
+func limits(top, maxEvents int) (int, int) {
 	if top <= 0 {
 		top = defaultTop
 	}

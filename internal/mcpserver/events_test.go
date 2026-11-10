@@ -169,8 +169,8 @@ func TestStatsInputLimits(t *testing.T) {
 		{statsInput{Top: 1000, MaxEvents: 10_000_000}, 100, 100_000}, // capped
 	}
 	for _, tt := range tests {
-		if top, maxEvents := tt.in.limits(); top != tt.top || maxEvents != tt.maxEvents {
-			t.Errorf("%+v.limits() = %d, %d; want %d, %d", tt.in, top, maxEvents, tt.top, tt.maxEvents)
+		if top, maxEvents := limits(tt.in.Top, tt.in.MaxEvents); top != tt.top || maxEvents != tt.maxEvents {
+			t.Errorf("limits(%d, %d) = %d, %d; want %d, %d", tt.in.Top, tt.in.MaxEvents, top, maxEvents, tt.top, tt.maxEvents)
 		}
 	}
 }

@@ -49,6 +49,21 @@ func addTools(server *mcp.Server, store *eventstore.Store) {
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name: "event_journeys",
+		Description: "Find the common paths that entities like orders or users take through the events. " +
+			"All events with the same value of 'byTag' (e.g. orderId) form one journey; repeats in a row are merged. " +
+			"Returns the most common paths with their share, median duration and example tag values. " +
+			"Use it for questions like 'what do customers do before they cancel?' (containing: OrderCancelled). " +
+			"Use 'startingWith' to leave out journeys that began before 'since'. " +
+			"To look at one journey in detail, call list_events with an example as tag filter. " +
+			"If the result says partial, tell the user the journeys are incomplete.",
+		Annotations: readOnly,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in journeysInput) (*mcp.CallToolResult, eventjson.Journeys, error) {
+		out, err := eventJourneys(ctx, store, in, time.Now())
+		return nil, out, err
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name: "event_trend",
 		Description: "Count events per hour, day or week, oldest first, including periods without events, " +
 			"with counts per event type in each period. Use it to see whether activity goes up or down, or when peaks happen. " +

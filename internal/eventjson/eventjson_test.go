@@ -122,3 +122,27 @@ func TestFromTagStats(t *testing.T) {
 		t.Errorf("got  %s\nwant %s", got, want)
 	}
 }
+
+func TestFromJourneys(t *testing.T) {
+	js := insight.Journeys{
+		Key: "orderId", Events: 40, Entities: 3, Matching: 3, Distinct: 2, Other: 1,
+		Top: []insight.Journey{{
+			Steps:          []insight.Step{{Name: "Started"}, {Name: "ItemAdded", Repeated: true}, {Name: "Cancelled"}},
+			Count:          2,
+			MedianDuration: 3*time.Minute + 20*time.Second + 400*time.Millisecond,
+			Examples:       []string{"o1", "o7"},
+		}},
+	}
+
+	got, err := json.Marshal(FromJourneys(js))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := `{"key":"orderId","events":40,"entities":3,"matching":3,"distinct":2,"top":[` +
+		`{"steps":[{"name":"Started"},{"name":"ItemAdded","repeated":true},{"name":"Cancelled"}],` +
+		`"count":2,"share":0.667,"medianDuration":"3m20s","examples":["o1","o7"]}],"other":1,"partial":false}`
+	if string(got) != want {
+		t.Errorf("got  %s\nwant %s", got, want)
+	}
+}

@@ -4,6 +4,7 @@ package eventjson
 
 import (
 	"encoding/json"
+	"math"
 	"time"
 
 	"github.com/ayberkyonar/axonscope/internal/eventstore"
@@ -147,4 +148,54 @@ func decodePayload(payload []byte) any {
 		return string(payload)
 	}
 	return v
+}
+
+// Journeys is the JSON form of insight.Journeys.
+type Journeys struct {
+	Key      string    `json:"key" jsonschema:"the tag that ties events into one journey"`
+	Events   int       `json:"events" jsonschema:"number of events read"`
+	Entities int       `json:"entities" jsonschema:"number of different tag values, each one journey"`
+	Matching int       `json:"matching" jsonschema:"number of journeys that passed containing and startingWith"`
+	Distinct int       `json:"distinct" jsonschema:"number of different paths among the matching journeys"`
+	Top      []Journey `json:"top" jsonschema:"the most common paths, most common first"`
+	Other    int       `json:"other" jsonschema:"number of matching journeys whose path is not in top"`
+	Partial  bool      `json:"partial" jsonschema:"true when reading stopped at the event limit: journeys are incomplete, narrow the selection for a full answer"`
+}
+
+// Journey is the JSON form of insight.Journey.
+type Journey struct {
+	Steps          []JourneyStep `json:"steps"`
+	MoreSteps      bool          `json:"moreSteps,omitempty" jsonschema:"the path continues after these steps"`
+	Count          int           `json:"count"`
+	Share          float64       `json:"share" jsonschema:"fraction of the matching journeys that took this path, from 0 to 1"`
+	MedianDuration string        `json:"medianDuration" jsonschema:"median time from the first to the last step, like 3m20s"`
+	Examples       []string      `json:"examples" jsonschema:"tag values of journeys that took this path; list_events with that tag shows one in full"`
+}
+
+// JourneyStep is the JSON form of insight.Step.
+type JourneyStep struct {
+	Name     string `json:"name"`
+	Repeated bool   `json:"repeated,omitempty" jsonschema:"the event occurred several times in a row"`
+}
+
+// FromJourneys converts journeys to their JSON form.
+func FromJourneys(js insight.Journeys) Journeys {
+	out := Journeys{
+		Key: js.Key, Events: js.Events, Entities: js.Entities, Matching: js.Matching,
+		Distinct: js.Distinct, Top: make([]Journey, len(js.Top)), Other: js.Other, Partial: js.Partial,
+	}
+	for i, j := range js.Top {
+		steps := make([]JourneyStep, len(j.Steps))
+		for k, s := range j.Steps {
+			steps[k] = JourneyStep{Name: s.Name, Repeated: s.Repeated}
+		}
+		out.Top[i] = Journey{
+			Steps: steps, MoreSteps: j.MoreSteps, Count: j.Count,
+			// Rounded to three decimals: 0.523 reads better than 0.5227272727.
+			Share:          math.Round(1000*float64(j.Count)/float64(js.Matching)) / 1000,
+			MedianDuration: j.MedianDuration.Round(time.Second).String(),
+			Examples:       j.Examples,
+		}
+	}
+	return out
 }
