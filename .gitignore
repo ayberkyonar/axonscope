@@ -31,3 +31,6 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local test setup with simulated events, not part of the product
+demo/

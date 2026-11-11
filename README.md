@@ -27,8 +27,21 @@ axonscope events                              # first 20 events
 axonscope events --name OrderPlaced --since 7d
 axonscope events --tag customerId=42
 axonscope event 12                            # one event, with its payload
-axonscope stats --since 24h                   # events per type in the last day
 ```
+
+Overviews:
+
+```sh
+axonscope stats --since 24h                   # events per type in the last day
+axonscope stats --since 7d --by-tag customerId          # most active customers
+axonscope trend --since 7d                    # events per day, including quiet days
+axonscope trend --since 24h --by hour --name OrderPlaced
+axonscope journeys --by-tag orderId --since 7d --containing OrderCancelled
+                                              # what happens before orders get cancelled
+```
+
+Counting by tag and journeys need each event's tags, which costs one call to Axon Server per
+event. They stop after 10,000 events (`--max-events`) and say so when the answer is incomplete.
 
 Event names can be full (`com.example.OrderPlaced`) or short (`OrderPlaced`). Times can be
 a date (`2026-11-05`), a date and time (`2026-11-05T21:00`), an RFC 3339 timestamp, or a
@@ -93,7 +106,9 @@ The server offers these tools, all read-only:
 | Tool | Purpose |
 |---|---|
 | `head` | Number of events stored |
-| `event_stats` | Events per type in a period: a quick overview |
+| `event_stats` | Events per type in a period, or per tag value: a quick overview |
+| `event_trend` | Events per hour, day or week, in the user's time zone |
+| `event_journeys` | Common paths that orders, users or other entities take |
 | `list_events` | Events filtered by name, tags and time, with paging |
 | `get_event` | One event with its payload |
 
